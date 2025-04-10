@@ -104,10 +104,8 @@ const Character: React.FC<CharacterProps> = ({
       if (names.length > 0) {
         console.log("Available animations:", names);
         names.forEach(name => {
-          // Fix TypeScript error: Check if actions[name] exists and is not null before calling stop()
-          const action = actions[name];
-          if (action) {
-            action.stop();
+          if (actions[name]) {
+            actions[name].stop();
           }
         });
       }
