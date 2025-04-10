@@ -43,30 +43,6 @@ const Character: React.FC<CharacterProps> = ({
     if (scene) {
       console.log("Scene loaded, finding bones...");
       
-      // Create a new pose for the character
-      const createDefaultPose = () => {
-        // Clone the scene to avoid modifying the original
-        const clonedScene = scene.clone();
-        
-        // Apply default pose to the cloned scene
-        clonedScene.traverse((object) => {
-          // Reset all rotations to default
-          if (object instanceof THREE.Bone) {
-            object.rotation.set(0, 0, 0);
-          }
-        });
-        
-        return clonedScene;
-      };
-      
-      // Store the default pose
-      const defaultPose = createDefaultPose();
-      
-      // Log all object names for debugging
-      scene.traverse((object) => {
-        console.log("Object name:", object.name);
-      });
-      
       // Find all relevant bones
       scene.traverse((object) => {
         // Find head bone
@@ -131,165 +107,59 @@ const Character: React.FC<CharacterProps> = ({
         });
       }
       
-      // RADICAL APPROACH: Directly modify the model's pose
-      // This is a more aggressive approach that directly modifies the model's pose
-      
-      // 1. Force arms down by directly setting quaternions
-      const setArmsDown = () => {
-        console.log("RADICAL APPROACH: Setting arms down by force...");
+      // Apply subtle arm position changes based on GLB analysis
+      const adjustArmPositions = () => {
+        console.log("Applying subtle arm position adjustments...");
         
-        // Try multiple bone naming patterns
-        const leftArmPatterns = [
-          "mixamorig:LeftArm", "LeftArm", "Left_Arm", "left_arm", 
-          "L_arm", "l_arm", "LeftShoulder", "Left_Shoulder"
-        ];
+        // Based on GLB analysis, we know the model has morph targets and bones
+        // We'll use a more targeted approach to adjust only the upper arm bones
         
-        const rightArmPatterns = [
-          "mixamorig:RightArm", "RightArm", "Right_Arm", "right_arm", 
-          "R_arm", "r_arm", "RightShoulder", "Right_Shoulder"
-        ];
-        
-        // Find and modify left arm
-        let leftArmFound = false;
-        scene.traverse((object) => {
-          if (!leftArmFound && leftArmPatterns.some(pattern => object.name.includes(pattern))) {
-            console.log(`Found left arm bone: ${object.name}`);
-            const bone = object as THREE.Bone;
-            
-            // Set rotation to point down
-            bone.rotation.set(0, 0, 0.8);
-            
-            // Also try quaternion approach
-            const downQuaternion = new THREE.Quaternion().setFromEuler(
-              new THREE.Euler(0, 0, 0.8)
-            );
-            bone.quaternion.copy(downQuaternion);
-            
-            // Mark as found
-            leftArmFound = true;
-            console.log(`Set left arm bone ${object.name} to down position`);
-          }
-        });
-        
-        // Find and modify right arm
-        let rightArmFound = false;
-        scene.traverse((object) => {
-          if (!rightArmFound && rightArmPatterns.some(pattern => object.name.includes(pattern))) {
-            console.log(`Found right arm bone: ${object.name}`);
-            const bone = object as THREE.Bone;
-            
-            // Set rotation to point down
-            bone.rotation.set(0, 0, -0.8);
-            
-            // Also try quaternion approach
-            const downQuaternion = new THREE.Quaternion().setFromEuler(
-              new THREE.Euler(0, 0, -0.8)
-            );
-            bone.quaternion.copy(downQuaternion);
-            
-            // Mark as found
-            rightArmFound = true;
-            console.log(`Set right arm bone ${object.name} to down position`);
-          }
-        });
-        
-        // If specific bones weren't found, try a more general approach
-        if (!leftArmFound || !rightArmFound) {
-          console.log("Specific arm bones not found, trying general approach...");
-          
-          scene.traverse((object) => {
-            const name = object.name.toLowerCase();
-            
-            // Left arm bones
-            if (name.includes('left') && (name.includes('arm') || name.includes('shoulder'))) {
-              const bone = object as THREE.Bone;
-              bone.rotation.set(0, 0, 0.8);
-              console.log(`Set general left arm bone ${object.name} to down position`);
-            }
-            
-            // Right arm bones
-            if (name.includes('right') && (name.includes('arm') || name.includes('shoulder'))) {
-              const bone = object as THREE.Bone;
-              bone.rotation.set(0, 0, -0.8);
-              console.log(`Set general right arm bone ${object.name} to down position`);
-            }
-          });
-        }
-      };
-      
-      // 2. Force smile by directly setting face morphs or bones
-      const setSmile = () => {
-        console.log("RADICAL APPROACH: Setting smile by force...");
-        
-        // Try to find smile morph targets
-        scene.traverse((object) => {
-          if (object instanceof THREE.Mesh && object.morphTargetDictionary) {
-            const morphTargets = object.morphTargetDictionary;
-            
-            // Check for smile-related morph targets
-            const smileTargets = Object.keys(morphTargets).filter(key => 
-              key.toLowerCase().includes('smile') || 
-              key.toLowerCase().includes('happy') ||
-              key.toLowerCase().includes('joy')
-            );
-            
-            if (smileTargets.length > 0) {
-              console.log(`Found smile morph targets: ${smileTargets.join(', ')}`);
-              
-              // Set all smile-related morph targets to maximum
-              smileTargets.forEach(target => {
-                const index = morphTargets[target];
-                if (object.morphTargetInfluences && index < object.morphTargetInfluences.length) {
-                  object.morphTargetInfluences[index] = 1.0;
-                  console.log(`Set morph target ${target} to 1.0`);
-                }
-              });
-            }
-          }
-        });
-        
-        // Try to find smile-related bones
-        const smileBonePatterns = [
-          "smile", "mouth", "lip", "jaw", "cheek"
-        ];
-        
+        // Find and adjust left upper arm
         scene.traverse((object) => {
           const name = object.name.toLowerCase();
-          if (object instanceof THREE.Bone && 
-              smileBonePatterns.some(pattern => name.includes(pattern))) {
-            console.log(`Found potential smile bone: ${object.name}`);
+          
+          // Target only the upper arm bones, not the entire arm
+          if ((name.includes('left') && name.includes('arm') && name.includes('upper')) ||
+              (name.includes('l_') && name.includes('arm') && !name.includes('forearm'))) {
             
-            // Apply smile rotation based on bone name
-            if (name.includes('jaw')) {
-              object.rotation.set(0.1, 0, 0); // Slight jaw opening
-            } else if (name.includes('lip') && name.includes('corner')) {
-              if (name.includes('left')) {
-                object.rotation.set(0, 0, 0.2); // Left lip corner up
-              } else if (name.includes('right')) {
-                object.rotation.set(0, 0, -0.2); // Right lip corner up
-              }
-            } else if (name.includes('cheek')) {
-              object.position.y += 0.02; // Raise cheeks slightly
-            }
+            console.log(`Adjusting left upper arm bone: ${object.name}`);
+            const bone = object as THREE.Bone;
             
-            console.log(`Applied smile pose to ${object.name}`);
+            // Apply a subtle rotation to bring the arm closer to the body
+            // Using a smaller value (0.3) compared to our previous aggressive approach (0.8)
+            bone.rotation.z = 0.3;
+            
+            console.log(`Set left upper arm rotation to: ${bone.rotation.z}`);
           }
         });
+        
+        // Find and adjust right upper arm
+        scene.traverse((object) => {
+          const name = object.name.toLowerCase();
+          
+          // Target only the upper arm bones, not the entire arm
+          if ((name.includes('right') && name.includes('arm') && name.includes('upper')) ||
+              (name.includes('r_') && name.includes('arm') && !name.includes('forearm'))) {
+            
+            console.log(`Adjusting right upper arm bone: ${object.name}`);
+            const bone = object as THREE.Bone;
+            
+            // Apply a subtle rotation to bring the arm closer to the body
+            // Using a smaller value (-0.3) compared to our previous aggressive approach (-0.8)
+            bone.rotation.z = -0.3;
+            
+            console.log(`Set right upper arm rotation to: ${bone.rotation.z}`);
+          }
+        });
+        
+        setArmsInitialized(true);
       };
       
-      // Apply radical changes
-      setArmsDown();
-      setSmile();
+      // Apply the subtle arm adjustments
+      adjustArmPositions();
       
-      // Apply changes again after a delay to ensure they take effect
-      setTimeout(() => {
-        setArmsDown();
-        setSmile();
-        console.log("Reapplied radical pose changes after delay");
-      }, 500);
-      
-      // Set flag to indicate arms are initialized
-      setArmsInitialized(true);
+      // Apply a second time after a short delay to ensure it takes effect
+      setTimeout(adjustArmPositions, 500);
     }
   }, [scene, actions, names]);
   
@@ -372,37 +242,35 @@ const Character: React.FC<CharacterProps> = ({
       }
     }
     
-    // RADICAL APPROACH: Reapply arm and smile settings after any animation change
-    if (scene && armsInitialized) {
-      // Force arms down again
-      const reapplyArmsDown = () => {
-        console.log("Reapplying arms down after animation change...");
-        
-        // Left arm
+    // Reapply arm positions after any animation change
+    if (armsInitialized) {
+      setTimeout(() => {
+        // Find and adjust left upper arm
         scene.traverse((object) => {
           const name = object.name.toLowerCase();
-          if (object instanceof THREE.Bone && 
-              name.includes('left') && 
-              (name.includes('arm') || name.includes('shoulder'))) {
-            object.rotation.set(0, 0, 0.8);
+          
+          // Target only the upper arm bones, not the entire arm
+          if ((name.includes('left') && name.includes('arm') && name.includes('upper')) ||
+              (name.includes('l_') && name.includes('arm') && !name.includes('forearm'))) {
+            
+            const bone = object as THREE.Bone;
+            bone.rotation.z = 0.3;
           }
         });
         
-        // Right arm
+        // Find and adjust right upper arm
         scene.traverse((object) => {
           const name = object.name.toLowerCase();
-          if (object instanceof THREE.Bone && 
-              name.includes('right') && 
-              (name.includes('arm') || name.includes('shoulder'))) {
-            object.rotation.set(0, 0, -0.8);
+          
+          // Target only the upper arm bones, not the entire arm
+          if ((name.includes('right') && name.includes('arm') && name.includes('upper')) ||
+              (name.includes('r_') && name.includes('arm') && !name.includes('forearm'))) {
+            
+            const bone = object as THREE.Bone;
+            bone.rotation.z = -0.3;
           }
         });
-      };
-      
-      // Reapply after a short delay to let animation start
-      setTimeout(reapplyArmsDown, 100);
-      // And again after a longer delay to ensure it sticks
-      setTimeout(reapplyArmsDown, 500);
+      }, 100);
     }
   }, [isSpeaking, isListening, smiling, actions, names, armsInitialized, scene]);
   
@@ -418,7 +286,19 @@ const Character: React.FC<CharacterProps> = ({
     return () => clearInterval(blinkInterval);
   }, [blinking]);
   
-  // Animation frame updates - MOST IMPORTANT PART FOR ENFORCING POSE
+  // Trigger random swaying
+  useEffect(() => {
+    const swayInterval = setInterval(() => {
+      if (!swaying && Math.random() < 0.2) {
+        setSwaying(true);
+        setTimeout(() => setSwaying(false), 2000);
+      }
+    }, 5000);
+    
+    return () => clearInterval(swayInterval);
+  }, [swaying]);
+  
+  // Animation frame updates
   useFrame((_, delta) => {
     // Lip sync - adjust jaw bone based on lipSyncData
     if (jawBone.current && isSpeaking) {
@@ -444,68 +324,84 @@ const Character: React.FC<CharacterProps> = ({
       }
     }
     
-    // RADICAL APPROACH: Force arm positions in EVERY frame
-    // This is the most aggressive approach - it overrides any animation
-    if (scene) {
-      // Force left arm down
-      scene.traverse((object) => {
-        const name = object.name.toLowerCase();
-        if (object instanceof THREE.Bone && 
-            name.includes('left') && 
-            (name.includes('arm') || name.includes('shoulder'))) {
-          // Force rotation to point down
-          object.rotation.set(0, 0, 0.8);
-        }
-      });
+    // Subtle head movement for more lifelike appearance
+    if (headBone.current) {
+      // Gentle swaying motion
+      const time = Date.now() * 0.001;
+      headBone.current.rotation.y = Math.sin(time * 0.5) * 0.05;
+      headBone.current.rotation.x = Math.sin(time * 0.3) * 0.03;
       
-      // Force right arm down
+      // More pronounced movement when listening
+      if (isListening) {
+        headBone.current.rotation.z = Math.sin(time * 0.7) * 0.02;
+      }
+    }
+    
+    // Body swaying when speaking or during special animation
+    if (spineBone.current) {
+      if (swaying || isSpeaking) {
+        const time = Date.now() * 0.001;
+        spineBone.current.rotation.y = Math.sin(time * 0.3) * 0.03;
+        spineBone.current.position.x = Math.sin(time * 0.5) * 0.01;
+      } else {
+        // Reset to neutral position
+        spineBone.current.rotation.y = 0;
+        spineBone.current.position.x = 0;
+      }
+    }
+    
+    // Gently enforce arm positions in every frame
+    if (armsInitialized) {
+      // Find and adjust left upper arm
       scene.traverse((object) => {
         const name = object.name.toLowerCase();
-        if (object instanceof THREE.Bone && 
-            name.includes('right') && 
-            (name.includes('arm') || name.includes('shoulder'))) {
-          // Force rotation to point down
-          object.rotation.set(0, 0, -0.8);
-        }
-      });
-      
-      // Force smile-related bones
-      scene.traverse((object) => {
-        const name = object.name.toLowerCase();
-        if (object instanceof THREE.Bone) {
-          // Jaw for slight smile opening
-          if (name.includes('jaw')) {
-            object.rotation.x = Math.max(object.rotation.x, 0.05);
-          }
-          
-          // Lip corners for smile
-          if (name.includes('lip') && name.includes('corner')) {
-            if (name.includes('left')) {
-              object.rotation.z = Math.max(object.rotation.z, 0.2);
-            } else if (name.includes('right')) {
-              object.rotation.z = Math.min(object.rotation.z, -0.2);
-            }
-          }
-        }
         
-        // Force smile morph targets if available
-        if (object instanceof THREE.Mesh && object.morphTargetDictionary) {
-          const morphTargets = object.morphTargetDictionary;
+        // Target only the upper arm bones, not the entire arm
+        if ((name.includes('left') && name.includes('arm') && name.includes('upper')) ||
+            (name.includes('l_') && name.includes('arm') && !name.includes('forearm'))) {
           
-          // Set smile-related morph targets
-          Object.keys(morphTargets).forEach(key => {
-            if (key.toLowerCase().includes('smile') || 
-                key.toLowerCase().includes('happy') ||
-                key.toLowerCase().includes('joy')) {
-              const index = morphTargets[key];
-              if (object.morphTargetInfluences && index < object.morphTargetInfluences.length) {
-                object.morphTargetInfluences[index] = 1.0;
-              }
-            }
-          });
+          const bone = object as THREE.Bone;
+          // Gradually adjust the rotation to avoid sudden movements
+          bone.rotation.z = THREE.MathUtils.lerp(bone.rotation.z, 0.3, 0.1);
+        }
+      });
+      
+      // Find and adjust right upper arm
+      scene.traverse((object) => {
+        const name = object.name.toLowerCase();
+        
+        // Target only the upper arm bones, not the entire arm
+        if ((name.includes('right') && name.includes('arm') && name.includes('upper')) ||
+            (name.includes('r_') && name.includes('arm') && !name.includes('forearm'))) {
+          
+          const bone = object as THREE.Bone;
+          // Gradually adjust the rotation to avoid sudden movements
+          bone.rotation.z = THREE.MathUtils.lerp(bone.rotation.z, -0.3, 0.1);
         }
       });
     }
+    
+    // Apply morph targets for smile if available
+    scene.traverse((object) => {
+      if (object instanceof THREE.Mesh && 
+          object.morphTargetDictionary && 
+          object.morphTargetInfluences) {
+        
+        // Check for smile-related morph targets based on GLB analysis
+        const smileTargets = [
+          'Mouth_Smile', 'Mouth_Smile_L', 'Mouth_Smile_R',
+          'A38_Mouth_Smile_Left', 'A39_Mouth_Smile_Right'
+        ];
+        
+        smileTargets.forEach(targetName => {
+          const idx = object.morphTargetDictionary[targetName];
+          if (idx !== undefined && smiling) {
+            // Apply a subtle smile influence (0.3) instead of maximum (1.0)
+            object.morphTargetInfluences[idx] = 0.3;
+          }
+        });
+      }
+    });
   });
   
   return (
