@@ -43,6 +43,25 @@ const Character: React.FC<CharacterProps> = ({
     if (scene) {
       console.log("Scene loaded, finding bones...");
       
+      // Create a new pose for the character
+      const createDefaultPose = () => {
+        // Clone the scene to avoid modifying the original
+        const clonedScene = scene.clone();
+        
+        // Apply default pose to the cloned scene
+        clonedScene.traverse((object) => {
+          // Reset all rotations to default
+          if (object instanceof THREE.Bone) {
+            object.rotation.set(0, 0, 0);
+          }
+        });
+        
+        return clonedScene;
+      };
+      
+      // Store the default pose
+      const defaultPose = createDefaultPose();
+      
       // Log all object names for debugging
       scene.traverse((object) => {
         console.log("Object name:", object.name);
@@ -112,145 +131,165 @@ const Character: React.FC<CharacterProps> = ({
         });
       }
       
-      // Create a custom pose for the character with arms at sides
-      const initializeArmPositions = () => {
-        console.log("Initializing arm positions...");
+      // RADICAL APPROACH: Directly modify the model's pose
+      // This is a more aggressive approach that directly modifies the model's pose
+      
+      // 1. Force arms down by directly setting quaternions
+      const setArmsDown = () => {
+        console.log("RADICAL APPROACH: Setting arms down by force...");
         
-        // Reset all arm bones to default position
-        [...leftArmBones.current, ...rightArmBones.current].forEach(bone => {
-          if (bone && bone.rotation) {
-            bone.rotation.set(0, 0, 0);
+        // Try multiple bone naming patterns
+        const leftArmPatterns = [
+          "mixamorig:LeftArm", "LeftArm", "Left_Arm", "left_arm", 
+          "L_arm", "l_arm", "LeftShoulder", "Left_Shoulder"
+        ];
+        
+        const rightArmPatterns = [
+          "mixamorig:RightArm", "RightArm", "Right_Arm", "right_arm", 
+          "R_arm", "r_arm", "RightShoulder", "Right_Shoulder"
+        ];
+        
+        // Find and modify left arm
+        let leftArmFound = false;
+        scene.traverse((object) => {
+          if (!leftArmFound && leftArmPatterns.some(pattern => object.name.includes(pattern))) {
+            console.log(`Found left arm bone: ${object.name}`);
+            const bone = object as THREE.Bone;
+            
+            // Set rotation to point down
+            bone.rotation.set(0, 0, 0.8);
+            
+            // Also try quaternion approach
+            const downQuaternion = new THREE.Quaternion().setFromEuler(
+              new THREE.Euler(0, 0, 0.8)
+            );
+            bone.quaternion.copy(downQuaternion);
+            
+            // Mark as found
+            leftArmFound = true;
+            console.log(`Set left arm bone ${object.name} to down position`);
           }
         });
         
-        // Apply specific rotations to position arms at sides
-        leftArmBones.current.forEach(bone => {
-          if (bone) {
-            const boneName = bone.name.toLowerCase();
+        // Find and modify right arm
+        let rightArmFound = false;
+        scene.traverse((object) => {
+          if (!rightArmFound && rightArmPatterns.some(pattern => object.name.includes(pattern))) {
+            console.log(`Found right arm bone: ${object.name}`);
+            const bone = object as THREE.Bone;
             
-            // Upper arm
-            if (boneName.includes('upper') || boneName.includes('shoulder')) {
-              // Position left upper arm down at side
-              bone.rotation.z = 0.5; // Rotate inward toward body
-              bone.rotation.x = 0.1; // Slight forward rotation
-              bone.rotation.y = 0;
-              console.log("Set left upper arm position:", bone.name);
-            }
+            // Set rotation to point down
+            bone.rotation.set(0, 0, -0.8);
             
-            // Lower arm/forearm
-            if (boneName.includes('lower') || boneName.includes('forearm') || boneName.includes('elbow')) {
-              // Position left forearm naturally
-              bone.rotation.z = 0.1;
-              bone.rotation.x = 0.1;
-              bone.rotation.y = 0;
-              console.log("Set left forearm position:", bone.name);
-            }
+            // Also try quaternion approach
+            const downQuaternion = new THREE.Quaternion().setFromEuler(
+              new THREE.Euler(0, 0, -0.8)
+            );
+            bone.quaternion.copy(downQuaternion);
             
-            // Hand/wrist
-            if (boneName.includes('hand') || boneName.includes('wrist')) {
-              // Position left hand naturally
-              bone.rotation.z = 0;
-              bone.rotation.x = 0;
-              bone.rotation.y = 0;
-              console.log("Set left hand position:", bone.name);
-            }
+            // Mark as found
+            rightArmFound = true;
+            console.log(`Set right arm bone ${object.name} to down position`);
           }
         });
         
-        rightArmBones.current.forEach(bone => {
-          if (bone) {
-            const boneName = bone.name.toLowerCase();
+        // If specific bones weren't found, try a more general approach
+        if (!leftArmFound || !rightArmFound) {
+          console.log("Specific arm bones not found, trying general approach...");
+          
+          scene.traverse((object) => {
+            const name = object.name.toLowerCase();
             
-            // Upper arm
-            if (boneName.includes('upper') || boneName.includes('shoulder')) {
-              // Position right upper arm down at side
-              bone.rotation.z = -0.5; // Rotate inward toward body (negative for right side)
-              bone.rotation.x = 0.1; // Slight forward rotation
-              bone.rotation.y = 0;
-              console.log("Set right upper arm position:", bone.name);
+            // Left arm bones
+            if (name.includes('left') && (name.includes('arm') || name.includes('shoulder'))) {
+              const bone = object as THREE.Bone;
+              bone.rotation.set(0, 0, 0.8);
+              console.log(`Set general left arm bone ${object.name} to down position`);
             }
             
-            // Lower arm/forearm
-            if (boneName.includes('lower') || boneName.includes('forearm') || boneName.includes('elbow')) {
-              // Position right forearm naturally
-              bone.rotation.z = -0.1;
-              bone.rotation.x = 0.1;
-              bone.rotation.y = 0;
-              console.log("Set right forearm position:", bone.name);
+            // Right arm bones
+            if (name.includes('right') && (name.includes('arm') || name.includes('shoulder'))) {
+              const bone = object as THREE.Bone;
+              bone.rotation.set(0, 0, -0.8);
+              console.log(`Set general right arm bone ${object.name} to down position`);
             }
-            
-            // Hand/wrist
-            if (boneName.includes('hand') || boneName.includes('wrist')) {
-              // Position right hand naturally
-              bone.rotation.z = 0;
-              bone.rotation.x = 0;
-              bone.rotation.y = 0;
-              console.log("Set right hand position:", bone.name);
-            }
-          }
-        });
-        
-        setArmsInitialized(true);
-        console.log("Arm positions initialized");
+          });
+        }
       };
       
-      // Initialize arm positions
-      initializeArmPositions();
+      // 2. Force smile by directly setting face morphs or bones
+      const setSmile = () => {
+        console.log("RADICAL APPROACH: Setting smile by force...");
+        
+        // Try to find smile morph targets
+        scene.traverse((object) => {
+          if (object instanceof THREE.Mesh && object.morphTargetDictionary) {
+            const morphTargets = object.morphTargetDictionary;
+            
+            // Check for smile-related morph targets
+            const smileTargets = Object.keys(morphTargets).filter(key => 
+              key.toLowerCase().includes('smile') || 
+              key.toLowerCase().includes('happy') ||
+              key.toLowerCase().includes('joy')
+            );
+            
+            if (smileTargets.length > 0) {
+              console.log(`Found smile morph targets: ${smileTargets.join(', ')}`);
+              
+              // Set all smile-related morph targets to maximum
+              smileTargets.forEach(target => {
+                const index = morphTargets[target];
+                if (object.morphTargetInfluences && index < object.morphTargetInfluences.length) {
+                  object.morphTargetInfluences[index] = 1.0;
+                  console.log(`Set morph target ${target} to 1.0`);
+                }
+              });
+            }
+          }
+        });
+        
+        // Try to find smile-related bones
+        const smileBonePatterns = [
+          "smile", "mouth", "lip", "jaw", "cheek"
+        ];
+        
+        scene.traverse((object) => {
+          const name = object.name.toLowerCase();
+          if (object instanceof THREE.Bone && 
+              smileBonePatterns.some(pattern => name.includes(pattern))) {
+            console.log(`Found potential smile bone: ${object.name}`);
+            
+            // Apply smile rotation based on bone name
+            if (name.includes('jaw')) {
+              object.rotation.set(0.1, 0, 0); // Slight jaw opening
+            } else if (name.includes('lip') && name.includes('corner')) {
+              if (name.includes('left')) {
+                object.rotation.set(0, 0, 0.2); // Left lip corner up
+              } else if (name.includes('right')) {
+                object.rotation.set(0, 0, -0.2); // Right lip corner up
+              }
+            } else if (name.includes('cheek')) {
+              object.position.y += 0.02; // Raise cheeks slightly
+            }
+            
+            console.log(`Applied smile pose to ${object.name}`);
+          }
+        });
+      };
       
-      // Apply a more aggressive approach to force arms down
+      // Apply radical changes
+      setArmsDown();
+      setSmile();
+      
+      // Apply changes again after a delay to ensure they take effect
       setTimeout(() => {
-        console.log("Applying forced arm positions...");
-        
-        // Try to find specific bones by exact names that might be in the model
-        scene.traverse((object) => {
-          // Common bone naming patterns in 3D models
-          const exactLeftArmBones = [
-            "LeftArm", "LeftForeArm", "LeftHand", "LeftShoulder",
-            "mixamorig:LeftArm", "mixamorig:LeftForeArm", "mixamorig:LeftHand", "mixamorig:LeftShoulder",
-            "Left_Arm", "Left_ForeArm", "Left_Hand", "Left_Shoulder"
-          ];
-          
-          const exactRightArmBones = [
-            "RightArm", "RightForeArm", "RightHand", "RightShoulder",
-            "mixamorig:RightArm", "mixamorig:RightForeArm", "mixamorig:RightHand", "mixamorig:RightShoulder",
-            "Right_Arm", "Right_ForeArm", "Right_Hand", "Right_Shoulder"
-          ];
-          
-          // Force left arm bones
-          if (exactLeftArmBones.includes(object.name)) {
-            const bone = object as THREE.Bone;
-            if (bone.name.includes("Shoulder") || bone.name.includes("Arm") && !bone.name.includes("Fore")) {
-              bone.rotation.z = 0.5;
-              bone.rotation.x = 0.1;
-              bone.rotation.y = 0;
-              console.log("Forced left arm bone position:", bone.name);
-            }
-          }
-          
-          // Force right arm bones
-          if (exactRightArmBones.includes(object.name)) {
-            const bone = object as THREE.Bone;
-            if (bone.name.includes("Shoulder") || bone.name.includes("Arm") && !bone.name.includes("Fore")) {
-              bone.rotation.z = -0.5;
-              bone.rotation.x = 0.1;
-              bone.rotation.y = 0;
-              console.log("Forced right arm bone position:", bone.name);
-            }
-          }
-        });
-        
-        // Try to directly modify the mesh vertices if bone approach isn't working
-        scene.traverse((object) => {
-          if (object instanceof THREE.Mesh && object.geometry) {
-            const geometry = object.geometry;
-            if (geometry.attributes && geometry.attributes.position) {
-              console.log("Found mesh with geometry:", object.name);
-              // This is a more extreme approach that would modify the actual mesh
-              // Only use if bone manipulation fails completely
-            }
-          }
-        });
+        setArmsDown();
+        setSmile();
+        console.log("Reapplied radical pose changes after delay");
       }, 500);
+      
+      // Set flag to indicate arms are initialized
+      setArmsInitialized(true);
     }
   }, [scene, actions, names]);
   
@@ -333,55 +372,39 @@ const Character: React.FC<CharacterProps> = ({
       }
     }
     
-    // Reapply arm positions after any animation change
-    if (armsInitialized) {
-      setTimeout(() => {
-        console.log("Reapplying arm positions after animation change...");
+    // RADICAL APPROACH: Reapply arm and smile settings after any animation change
+    if (scene && armsInitialized) {
+      // Force arms down again
+      const reapplyArmsDown = () => {
+        console.log("Reapplying arms down after animation change...");
         
         // Left arm
-        leftArmBones.current.forEach(bone => {
-          if (bone) {
-            const boneName = bone.name.toLowerCase();
-            
-            // Upper arm
-            if (boneName.includes('upper') || boneName.includes('shoulder')) {
-              bone.rotation.z = 0.5;
-              bone.rotation.x = 0.1;
-              bone.rotation.y = 0;
-            }
-            
-            // Lower arm/forearm
-            if (boneName.includes('lower') || boneName.includes('forearm') || boneName.includes('elbow')) {
-              bone.rotation.z = 0.1;
-              bone.rotation.x = 0.1;
-              bone.rotation.y = 0;
-            }
+        scene.traverse((object) => {
+          const name = object.name.toLowerCase();
+          if (object instanceof THREE.Bone && 
+              name.includes('left') && 
+              (name.includes('arm') || name.includes('shoulder'))) {
+            object.rotation.set(0, 0, 0.8);
           }
         });
         
         // Right arm
-        rightArmBones.current.forEach(bone => {
-          if (bone) {
-            const boneName = bone.name.toLowerCase();
-            
-            // Upper arm
-            if (boneName.includes('upper') || boneName.includes('shoulder')) {
-              bone.rotation.z = -0.5;
-              bone.rotation.x = 0.1;
-              bone.rotation.y = 0;
-            }
-            
-            // Lower arm/forearm
-            if (boneName.includes('lower') || boneName.includes('forearm') || boneName.includes('elbow')) {
-              bone.rotation.z = -0.1;
-              bone.rotation.x = 0.1;
-              bone.rotation.y = 0;
-            }
+        scene.traverse((object) => {
+          const name = object.name.toLowerCase();
+          if (object instanceof THREE.Bone && 
+              name.includes('right') && 
+              (name.includes('arm') || name.includes('shoulder'))) {
+            object.rotation.set(0, 0, -0.8);
           }
         });
-      }, 100);
+      };
+      
+      // Reapply after a short delay to let animation start
+      setTimeout(reapplyArmsDown, 100);
+      // And again after a longer delay to ensure it sticks
+      setTimeout(reapplyArmsDown, 500);
     }
-  }, [isSpeaking, isListening, smiling, actions, names, armsInitialized]);
+  }, [isSpeaking, isListening, smiling, actions, names, armsInitialized, scene]);
   
   // Trigger random blinking
   useEffect(() => {
@@ -395,19 +418,7 @@ const Character: React.FC<CharacterProps> = ({
     return () => clearInterval(blinkInterval);
   }, [blinking]);
   
-  // Trigger random swaying
-  useEffect(() => {
-    const swayInterval = setInterval(() => {
-      if (!swaying && Math.random() < 0.2) {
-        setSwaying(true);
-        setTimeout(() => setSwaying(false), 2000);
-      }
-    }, 5000);
-    
-    return () => clearInterval(swayInterval);
-  }, [swaying]);
-  
-  // Animation frame updates
+  // Animation frame updates - MOST IMPORTANT PART FOR ENFORCING POSE
   useFrame((_, delta) => {
     // Lip sync - adjust jaw bone based on lipSyncData
     if (jawBone.current && isSpeaking) {
@@ -433,73 +444,65 @@ const Character: React.FC<CharacterProps> = ({
       }
     }
     
-    // Subtle head movement for more lifelike appearance
-    if (headBone.current) {
-      // Gentle swaying motion
-      const time = Date.now() * 0.001;
-      headBone.current.rotation.y = Math.sin(time * 0.5) * 0.05;
-      headBone.current.rotation.x = Math.sin(time * 0.3) * 0.03;
-      
-      // More pronounced movement when listening
-      if (isListening) {
-        headBone.current.rotation.z = Math.sin(time * 0.7) * 0.02;
-      }
-    }
-    
-    // Body swaying when speaking or during special animation
-    if (spineBone.current) {
-      if (swaying || isSpeaking) {
-        const time = Date.now() * 0.001;
-        spineBone.current.rotation.y = Math.sin(time * 0.3) * 0.03;
-        spineBone.current.position.x = Math.sin(time * 0.5) * 0.01;
-      } else {
-        // Reset to neutral position
-        spineBone.current.rotation.y = 0;
-        spineBone.current.position.x = 0;
-      }
-    }
-    
-    // Continuously enforce arm positions in every frame
-    if (armsInitialized) {
-      // Left arm
-      leftArmBones.current.forEach(bone => {
-        if (bone) {
-          const boneName = bone.name.toLowerCase();
-          
-          // Upper arm
-          if (boneName.includes('upper') || boneName.includes('shoulder')) {
-            bone.rotation.z = 0.5;
-            bone.rotation.x = 0.1;
-            bone.rotation.y = 0;
-          }
-          
-          // Lower arm/forearm
-          if (boneName.includes('lower') || boneName.includes('forearm') || boneName.includes('elbow')) {
-            bone.rotation.z = 0.1;
-            bone.rotation.x = 0.1;
-            bone.rotation.y = 0;
-          }
+    // RADICAL APPROACH: Force arm positions in EVERY frame
+    // This is the most aggressive approach - it overrides any animation
+    if (scene) {
+      // Force left arm down
+      scene.traverse((object) => {
+        const name = object.name.toLowerCase();
+        if (object instanceof THREE.Bone && 
+            name.includes('left') && 
+            (name.includes('arm') || name.includes('shoulder'))) {
+          // Force rotation to point down
+          object.rotation.set(0, 0, 0.8);
         }
       });
       
-      // Right arm
-      rightArmBones.current.forEach(bone => {
-        if (bone) {
-          const boneName = bone.name.toLowerCase();
-          
-          // Upper arm
-          if (boneName.includes('upper') || boneName.includes('shoulder')) {
-            bone.rotation.z = -0.5;
-            bone.rotation.x = 0.1;
-            bone.rotation.y = 0;
+      // Force right arm down
+      scene.traverse((object) => {
+        const name = object.name.toLowerCase();
+        if (object instanceof THREE.Bone && 
+            name.includes('right') && 
+            (name.includes('arm') || name.includes('shoulder'))) {
+          // Force rotation to point down
+          object.rotation.set(0, 0, -0.8);
+        }
+      });
+      
+      // Force smile-related bones
+      scene.traverse((object) => {
+        const name = object.name.toLowerCase();
+        if (object instanceof THREE.Bone) {
+          // Jaw for slight smile opening
+          if (name.includes('jaw')) {
+            object.rotation.x = Math.max(object.rotation.x, 0.05);
           }
           
-          // Lower arm/forearm
-          if (boneName.includes('lower') || boneName.includes('forearm') || boneName.includes('elbow')) {
-            bone.rotation.z = -0.1;
-            bone.rotation.x = 0.1;
-            bone.rotation.y = 0;
+          // Lip corners for smile
+          if (name.includes('lip') && name.includes('corner')) {
+            if (name.includes('left')) {
+              object.rotation.z = Math.max(object.rotation.z, 0.2);
+            } else if (name.includes('right')) {
+              object.rotation.z = Math.min(object.rotation.z, -0.2);
+            }
           }
+        }
+        
+        // Force smile morph targets if available
+        if (object instanceof THREE.Mesh && object.morphTargetDictionary) {
+          const morphTargets = object.morphTargetDictionary;
+          
+          // Set smile-related morph targets
+          Object.keys(morphTargets).forEach(key => {
+            if (key.toLowerCase().includes('smile') || 
+                key.toLowerCase().includes('happy') ||
+                key.toLowerCase().includes('joy')) {
+              const index = morphTargets[key];
+              if (object.morphTargetInfluences && index < object.morphTargetInfluences.length) {
+                object.morphTargetInfluences[index] = 1.0;
+              }
+            }
+          });
         }
       });
     }
