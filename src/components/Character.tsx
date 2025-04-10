@@ -91,36 +91,56 @@ const Character: React.FC<CharacterProps> = ({
       
       console.log('Available animations:', names);
       
-      // Force arms to sides position if needed
+      // Force arms to sides position - Enhanced version with stronger constraints
       scene.traverse((object) => {
         if (object.name.toLowerCase().includes('arm') || 
             object.name.toLowerCase().includes('hand') ||
-            object.name.toLowerCase().includes('shoulder')) {
+            object.name.toLowerCase().includes('shoulder') ||
+            object.name.toLowerCase().includes('forearm') ||
+            object.name.toLowerCase().includes('wrist')) {
           const bone = object as THREE.Bone;
           
           // Reset any rotation that might cause arms to be outstretched
           if (object.name.toLowerCase().includes('left')) {
             if (bone.rotation) {
-              // Adjust left arm to be at side
-              bone.rotation.z = 0.1; // Very slight inward rotation
+              // Adjust left arm to be firmly at side
+              bone.rotation.z = 0.2; // Stronger inward rotation
               bone.rotation.x = 0;
               bone.rotation.y = 0;
               
               // If this is the upper arm, position it closer to body
               if (object.name.toLowerCase().includes('upper')) {
-                bone.rotation.z = 0.05;
+                bone.rotation.z = 0.3; // Increased inward rotation
+              }
+              
+              // If this is the forearm or hand, ensure it's pointing downward
+              if (object.name.toLowerCase().includes('forearm') || 
+                  object.name.toLowerCase().includes('hand') ||
+                  object.name.toLowerCase().includes('wrist')) {
+                bone.rotation.x = 0;
+                bone.rotation.y = 0;
+                bone.rotation.z = 0.1;
               }
             }
           } else if (object.name.toLowerCase().includes('right')) {
             if (bone.rotation) {
-              // Adjust right arm to be at side
-              bone.rotation.z = -0.1; // Very slight inward rotation (negative for right side)
+              // Adjust right arm to be firmly at side
+              bone.rotation.z = -0.2; // Stronger inward rotation (negative for right side)
               bone.rotation.x = 0;
               bone.rotation.y = 0;
               
               // If this is the upper arm, position it closer to body
               if (object.name.toLowerCase().includes('upper')) {
-                bone.rotation.z = -0.05;
+                bone.rotation.z = -0.3; // Increased inward rotation
+              }
+              
+              // If this is the forearm or hand, ensure it's pointing downward
+              if (object.name.toLowerCase().includes('forearm') || 
+                  object.name.toLowerCase().includes('hand') ||
+                  object.name.toLowerCase().includes('wrist')) {
+                bone.rotation.x = 0;
+                bone.rotation.y = 0;
+                bone.rotation.z = -0.1;
               }
             }
           }
@@ -133,24 +153,84 @@ const Character: React.FC<CharacterProps> = ({
         scene.traverse((object) => {
           if (object.name.toLowerCase().includes('arm') || 
               object.name.toLowerCase().includes('hand') ||
-              object.name.toLowerCase().includes('shoulder')) {
+              object.name.toLowerCase().includes('shoulder') ||
+              object.name.toLowerCase().includes('forearm') ||
+              object.name.toLowerCase().includes('wrist')) {
             const bone = object as THREE.Bone;
             
-            // Force hands to sides position
+            // Force hands to sides position with stronger constraints
             if (object.name.toLowerCase().includes('left')) {
               if (bone.rotation) {
-                bone.rotation.z = Math.min(bone.rotation.z, 0.1);
-                bone.rotation.x = 0;
+                // Ensure left arm is at side
+                if (object.name.toLowerCase().includes('upper')) {
+                  bone.rotation.z = 0.3; // Stronger inward rotation
+                  bone.rotation.x = 0;
+                  bone.rotation.y = 0;
+                } else if (object.name.toLowerCase().includes('forearm') || 
+                          object.name.toLowerCase().includes('lower')) {
+                  bone.rotation.z = 0.1;
+                  bone.rotation.x = 0;
+                  bone.rotation.y = 0;
+                } else if (object.name.toLowerCase().includes('hand') || 
+                          object.name.toLowerCase().includes('wrist')) {
+                  bone.rotation.z = 0.1;
+                  bone.rotation.x = 0;
+                  bone.rotation.y = 0;
+                }
               }
             } else if (object.name.toLowerCase().includes('right')) {
               if (bone.rotation) {
-                bone.rotation.z = Math.max(bone.rotation.z, -0.1);
-                bone.rotation.x = 0;
+                // Ensure right arm is at side
+                if (object.name.toLowerCase().includes('upper')) {
+                  bone.rotation.z = -0.3; // Stronger inward rotation
+                  bone.rotation.x = 0;
+                  bone.rotation.y = 0;
+                } else if (object.name.toLowerCase().includes('forearm') || 
+                          object.name.toLowerCase().includes('lower')) {
+                  bone.rotation.z = -0.1;
+                  bone.rotation.x = 0;
+                  bone.rotation.y = 0;
+                } else if (object.name.toLowerCase().includes('hand') || 
+                          object.name.toLowerCase().includes('wrist')) {
+                  bone.rotation.z = -0.1;
+                  bone.rotation.x = 0;
+                  bone.rotation.y = 0;
+                }
               }
             }
           }
         });
       }, 100);
+      
+      // Apply a third pass after a longer delay to ensure animations don't override our settings
+      setTimeout(() => {
+        scene.traverse((object) => {
+          if (object.name.toLowerCase().includes('arm') || 
+              object.name.toLowerCase().includes('hand') ||
+              object.name.toLowerCase().includes('shoulder')) {
+            const bone = object as THREE.Bone;
+            
+            // Force arms to sides with even stronger constraints
+            if (object.name.toLowerCase().includes('left')) {
+              if (bone.rotation) {
+                if (object.name.toLowerCase().includes('upper')) {
+                  bone.rotation.z = 0.3;
+                  bone.rotation.x = 0;
+                  bone.rotation.y = 0;
+                }
+              }
+            } else if (object.name.toLowerCase().includes('right')) {
+              if (bone.rotation) {
+                if (object.name.toLowerCase().includes('upper')) {
+                  bone.rotation.z = -0.3;
+                  bone.rotation.x = 0;
+                  bone.rotation.y = 0;
+                }
+              }
+            }
+          }
+        });
+      }, 500);
     }
   }, [scene, actions, names]);
   
@@ -179,6 +259,9 @@ const Character: React.FC<CharacterProps> = ({
           idleAction.fadeOut(0.5);
         }
       }
+      
+      // Keep smiling while speaking
+      setSmiling(true);
     } else if (isListening && listenAnimation && actions[listenAnimation]) {
       // Crossfade to listening animation
       const listenAction = actions[listenAnimation];
@@ -193,11 +276,8 @@ const Character: React.FC<CharacterProps> = ({
         }
       }
       
-      // When listening, occasionally smile
-      if (isListening && !smiling && Math.random() < 0.01) {
-        setSmiling(true);
-        setTimeout(() => setSmiling(false), 2000);
-      }
+      // Always smile when listening
+      setSmiling(true);
     } else if (idleAnimation && actions[idleAnimation]) {
       // Return to idle animation
       const idleAction = actions[idleAnimation];
@@ -218,6 +298,9 @@ const Character: React.FC<CharacterProps> = ({
           listenAction.fadeOut(0.5);
         }
       }
+      
+      // Keep smiling in idle state too
+      setSmiling(true);
     }
     
     // Play smile animation when smiling
@@ -225,14 +308,42 @@ const Character: React.FC<CharacterProps> = ({
       const smileAction = actions[smileAnimation];
       if (smileAction) {
         smileAction.reset().fadeIn(0.2).play();
-        setTimeout(() => {
-          if (smileAction) {
-            smileAction.fadeOut(0.2);
-          }
-        }, 1800);
+        // Keep the smile animation playing continuously
+        smileAction.setLoop(THREE.LoopRepeat, Infinity);
       }
     }
-  }, [isSpeaking, isListening, smiling, actions, names]);
+    
+    // Force arms to sides after any animation change
+    if (scene) {
+      setTimeout(() => {
+        scene.traverse((object) => {
+          if (object.name.toLowerCase().includes('arm') || 
+              object.name.toLowerCase().includes('hand') ||
+              object.name.toLowerCase().includes('shoulder')) {
+            const bone = object as THREE.Bone;
+            
+            if (object.name.toLowerCase().includes('left')) {
+              if (bone.rotation) {
+                if (object.name.toLowerCase().includes('upper')) {
+                  bone.rotation.z = 0.3;
+                  bone.rotation.x = 0;
+                  bone.rotation.y = 0;
+                }
+              }
+            } else if (object.name.toLowerCase().includes('right')) {
+              if (bone.rotation) {
+                if (object.name.toLowerCase().includes('upper')) {
+                  bone.rotation.z = -0.3;
+                  bone.rotation.x = 0;
+                  bone.rotation.y = 0;
+                }
+              }
+            }
+          }
+        });
+      }, 100);
+    }
+  }, [isSpeaking, isListening, smiling, actions, names, scene]);
   
   // Trigger random blinking
   useEffect(() => {
@@ -310,10 +421,34 @@ const Character: React.FC<CharacterProps> = ({
       }
     }
     
-    // Smiling expression
-    if (smiling && isListening) {
+    // Smiling expression - ensure it's always active
+    if (smiling) {
       // If we have specific facial bones for smiling, we would animate them here
       // Since we're using animation clips, this is handled in the useEffect above
+      
+      // Force arms to sides in every frame to prevent animations from moving them
+      if (scene) {
+        scene.traverse((object) => {
+          if ((object.name.toLowerCase().includes('arm') && object.name.toLowerCase().includes('upper')) || 
+              object.name.toLowerCase().includes('shoulder')) {
+            const bone = object as THREE.Bone;
+            
+            if (object.name.toLowerCase().includes('left')) {
+              if (bone.rotation) {
+                bone.rotation.z = 0.3;
+                bone.rotation.x = 0;
+                bone.rotation.y = 0;
+              }
+            } else if (object.name.toLowerCase().includes('right')) {
+              if (bone.rotation) {
+                bone.rotation.z = -0.3;
+                bone.rotation.x = 0;
+                bone.rotation.y = 0;
+              }
+            }
+          }
+        });
+      }
     }
   });
   
