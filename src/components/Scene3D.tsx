@@ -54,8 +54,8 @@ const Scene3D: React.FC<Scene3DProps> = ({
             {/* Character component with ref for positioning loading indicator */}
             <group ref={characterRef}>
               <Character 
-                position={[0, -1.8, 0]} 
-                scale={[2.5, 2.5, 2.5]} 
+                position={[0, -2.8, 0]} 
+                scale={[2.8, 2.8, 2.8]} 
                 rotation={[0, 0, 0]}
                 isSpeaking={isSpeaking}
                 isListening={isListening}
