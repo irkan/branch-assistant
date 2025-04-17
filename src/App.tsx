@@ -43,6 +43,7 @@ function App() {
   const [aiResponse, setAiResponse] = useState('');
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hasGreetingSent, setHasGreetingSent] = useState(false);
 
   // State variables for chat functionality
   const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'assistant' }[]>([]);
@@ -868,6 +869,125 @@ function App() {
     }
   }, [currentCustomer, detectedFaceImage]);
 
+  // Handle detected face appearance in top right corner and send greeting
+  useEffect(() => {
+    // Only run this effect when face is first detected and visible and greeting hasn't been sent yet
+    if (faceDetected && detectedFace && !isSpeaking && !isProcessing && !hasGreetingSent) {
+      console.log('Face detected and visible in top right corner, sending greeting message');
+      
+      // Mark greeting as sent to prevent duplicates
+      setHasGreetingSent(true);
+      
+      // Default greeting message
+      const greetingMessage = "Salam. Sizə necə kömək edə bilərəm?";
+      
+      // Set processing state
+      setIsProcessing(true);
+      
+      // Send greeting to webhook
+      const webhookUrl = process.env.REACT_APP_WEBHOOK_URL;
+      console.log('REACT_APP_WEBHOOK_URL is:', webhookUrl); // Debug log for webhook URL
+      if (webhookUrl) {
+        (async () => {
+          try {
+            // Send directly to the webhook URL without proxy
+            console.log(`Sending greeting directly to webhook: ${webhookUrl}`);
+            console.log('Complete webhook request details:', {
+              url: webhookUrl,
+              method: 'POST',
+              body: {
+                message: greetingMessage,
+                timestamp: new Date().toISOString(),
+                source: 'face_detection'
+              }
+            });
+            
+            // Send request to webhook
+            const webhookResponse = await fetch(webhookUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                message: greetingMessage,
+                timestamp: new Date().toISOString(),
+                source: 'face_detection'
+              })
+            });
+            
+            // Handle webhook response
+            if (webhookResponse.ok) {
+              console.log('Successfully sent greeting to webhook, processing response');
+              
+              // Set AI response in state
+              setAiResponse(greetingMessage);
+              
+              // Reset processing state
+              setIsProcessing(false);
+              
+              // Get audio response from webhook
+              const audioBlob = await webhookResponse.blob();
+              console.log('Received audio data from webhook for greeting');
+              
+              // Create audio URL
+              const audioUrl = URL.createObjectURL(audioBlob);
+              
+              // Create audio element and play
+              const audio = new Audio(audioUrl);
+              audio.setAttribute('type', 'audio/aac');
+              
+              // Set speaking state to true during playback
+              setIsSpeaking(true);
+              
+              // Set up playback completion
+              audio.onended = () => {
+                console.log("Greeting playback complete, activating microphone...");
+                setIsSpeaking(false);
+                URL.revokeObjectURL(audioUrl);
+                
+                // Start listening after greeting
+                setTimeout(() => {
+                  if (speechRecognitionRef.current) {
+                    setIsListening(true);
+                    speechRecognitionRef.current.startListening();
+                    console.log('Started speech recognition after greeting');
+                  }
+                }, 500);
+              };
+              
+              // Play greeting audio
+              audio.play().catch(error => {
+                console.error('Error playing greeting audio:', error);
+                // Fallback to immediate microphone activation
+                setIsSpeaking(false);
+                setIsListening(true);
+                if (speechRecognitionRef.current) {
+                  speechRecognitionRef.current.startListening();
+                }
+              });
+            } else {
+              console.error('Failed to send greeting to webhook:', await webhookResponse.text());
+              // Fallback to immediate microphone activation
+              setIsProcessing(false);
+              setIsListening(true);
+              if (speechRecognitionRef.current) {
+                speechRecognitionRef.current.startListening();
+              }
+            }
+          } catch (webhookError) {
+            console.error('Error sending greeting to webhook:', webhookError);
+            // Fallback to immediate microphone activation
+            setIsProcessing(false);
+            setIsListening(true);
+            if (speechRecognitionRef.current) {
+              speechRecognitionRef.current.startListening();
+            }
+          }
+        })();
+      }
+    }
+  }, [faceDetected, detectedFace, isSpeaking, isProcessing, hasGreetingSent]);
+  
   // Face detection interval with better tracking
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -1049,109 +1169,6 @@ function App() {
                         clearInterval(interval);
                         interval = null;
                       }
-                      
-                      // Send greeting message to webhook after face is detected
-                      console.log('Face detected, sending greeting message to webhook');
-                      
-                      // Default greeting message
-                      const greetingMessage = "Salam. Sizə necə kömək edə bilərəm?";
-                      
-                      // Send greeting to webhook
-                      const webhookUrl = process.env.REACT_APP_WEBHOOK_URL;
-                      if (webhookUrl) {
-                        try {
-                          // Extract path part from webhook URL
-                          const webhookParts = webhookUrl.split('/');
-                          const webhookPath = webhookParts.slice(3).join('/');
-                          const proxyUrl = `/api/${webhookPath}`;
-                          
-                          console.log(`Sending greeting to webhook via proxy: ${proxyUrl}`);
-                          
-                          // Set loading state
-                          setIsProcessing(true);
-                          
-                          // Send request to webhook
-                          const webhookResponse = await fetch(proxyUrl, {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                              message: greetingMessage,
-                              timestamp: new Date().toISOString(),
-                              source: 'face_detection'
-                            })
-                          });
-                          
-                          // Handle webhook response
-                          if (webhookResponse.ok) {
-                            console.log('Successfully sent greeting to webhook, processing response');
-                            
-                            // Set AI response in state
-                            setAiResponse(greetingMessage);
-                            
-                            // Reset processing state
-                            setIsProcessing(false);
-                            
-                            // Get audio response from webhook
-                            const audioBlob = await webhookResponse.blob();
-                            console.log('Received audio data from webhook for greeting');
-                            
-                            // Create audio URL
-                            const audioUrl = URL.createObjectURL(audioBlob);
-                            
-                            // Create audio element and play
-                            const audio = new Audio(audioUrl);
-                            audio.setAttribute('type', 'audio/aac');
-                            
-                            // Set speaking state to true during playback
-                            setIsSpeaking(true);
-                            
-                            // Set up playback completion
-                            audio.onended = () => {
-                              console.log("Greeting playback complete, activating microphone...");
-                              setIsSpeaking(false);
-                              URL.revokeObjectURL(audioUrl);
-                              
-                              // Start listening after greeting
-                              setTimeout(() => {
-                                if (speechRecognitionRef.current) {
-                                  setIsListening(true);
-                                  speechRecognitionRef.current.startListening();
-                                  console.log('Started speech recognition after greeting');
-                                }
-                              }, 500);
-                            };
-                            
-                            // Play greeting audio
-                            audio.play().catch(error => {
-                              console.error('Error playing greeting audio:', error);
-                              // Fallback to immediate microphone activation
-                              setIsSpeaking(false);
-                              setIsListening(true);
-                              if (speechRecognitionRef.current) {
-                                speechRecognitionRef.current.startListening();
-                              }
-                            });
-                          } else {
-                            console.error('Failed to send greeting to webhook:', await webhookResponse.text());
-                            // Fallback to immediate microphone activation
-                            setIsProcessing(false);
-                            setIsListening(true);
-                            if (speechRecognitionRef.current) {
-                              speechRecognitionRef.current.startListening();
-                            }
-                          }
-                        } catch (webhookError) {
-                          console.error('Error sending greeting to webhook:', webhookError);
-                          // Fallback to immediate microphone activation
-                          setIsProcessing(false);
-                          setIsListening(true);
-                          if (speechRecognitionRef.current) {
-                            speechRecognitionRef.current.startListening();
-                          }
-                        }
-                      }
                     }
                   } catch (descError) {
                     console.error('Error computing face descriptor:', descError);
@@ -1164,6 +1181,12 @@ function App() {
             faceDetectedFrames = 0;
             setIsFaceDetected(false);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Reset greeting state when face is lost
+            if (hasGreetingSent) {
+              console.log('Face lost, resetting greeting state');
+              setHasGreetingSent(false);
+            }
           }
         } catch (error) {
           console.error('Error in face detection cycle:', error);
@@ -1178,7 +1201,7 @@ function App() {
         }
       };
     }
-  }, [isModelLoaded, currentCustomer, isSpeaking, isProcessing, recognizeCustomer]);
+  }, [isModelLoaded, currentCustomer, isSpeaking, isProcessing, recognizeCustomer, hasGreetingSent]);
   
   return (
     <div className="App">
