@@ -148,14 +148,96 @@ export function Model(props: CharacterProps) {
       group.current.rotation.y = rotationValue
     }
 
-    // Smile animation
+    // Handle mouth morphing for lip sync
     if (headMeshRef.current?.morphTargetDictionary && headMeshRef.current?.morphTargetInfluences) {
-      const smileIndex = headMeshRef.current.morphTargetDictionary['Mouth_Smile']
-      if (smileIndex !== undefined) {
-        // Calculate smile value between 0.1 and 0.4
-        const smileProgress = (Math.sin(timeRef.current * smileSpeed) + 1) / 2 // Convert -1,1 to 0,1
-        const smileValue = 0.1 + (smileProgress * 0.3) // Map 0,1 to 0.1,0.4
-        headMeshRef.current.morphTargetInfluences[smileIndex] = smileValue
+      // Lip sync takes priority when speaking
+      if (props.isSpeaking && props.lipSyncData !== undefined) {
+        // Find all mouth-related morphs
+        const mouthOpenIndex = headMeshRef.current.morphTargetDictionary['Mouth_Open']
+        const smileIndex = headMeshRef.current.morphTargetDictionary['Mouth_Smile']
+        const mouthNarrowIndex = headMeshRef.current.morphTargetDictionary['Mouth_Narrow'] // For "ee" sounds
+        const mouthRoundIndex = headMeshRef.current.morphTargetDictionary['Mouth_Round'] // For "oh" sounds
+        const mouthWideIndex = headMeshRef.current.morphTargetDictionary['Mouth_Wide'] // For "ah" sounds
+        const jawOpenIndex = headMeshRef.current.morphTargetDictionary['Jaw_Open']
+        
+        // Get current lip sync value (0-1 range)
+        const lipValue = props.lipSyncData
+
+        // Create more natural mouth movement with time-based variation
+        // This simulates the different mouth shapes during speech
+        const time = timeRef.current * 15  // Speed up time for variation
+        
+        // Generate semi-random variations based on lipValue and time
+        // These create more realistic "talking" patterns with different mouth shapes
+        const variationA = Math.sin(time) * 0.2 * lipValue
+        const variationB = Math.sin(time * 1.3) * 0.2 * lipValue
+        const variationC = Math.cos(time * 0.7) * 0.15 * lipValue
+        
+        // Apply different mouth shapes based on time patterns to simulate different phonemes
+        if (mouthOpenIndex !== undefined) {
+          // Base mouth opening on lip sync value with added variation
+          const openAmount = Math.max(0, lipValue * 0.7 + variationA)
+          headMeshRef.current.morphTargetInfluences[mouthOpenIndex] = openAmount
+        }
+        
+        // Open jaw proportionally to overall mouth opening
+        if (jawOpenIndex !== undefined) {
+          const jawAmount = Math.max(0, lipValue * 0.5 + variationB * 0.3)
+          headMeshRef.current.morphTargetInfluences[jawOpenIndex] = jawAmount
+        }
+        
+        // Apply different shapes based on the "speech pattern"
+        // Wide mouth for "ah" sounds
+        if (mouthWideIndex !== undefined) {
+          // More wide shape during certain phases of speech
+          const wideAmount = Math.max(0, (variationA > 0 ? variationA : 0) * 0.8)
+          headMeshRef.current.morphTargetInfluences[mouthWideIndex] = wideAmount
+        }
+        
+        // Round mouth for "oh" sounds
+        if (mouthRoundIndex !== undefined) {
+          // More round shape during other phases
+          const roundAmount = Math.max(0, (variationB > 0 ? variationB : 0) * 0.7)
+          headMeshRef.current.morphTargetInfluences[mouthRoundIndex] = roundAmount
+        }
+        
+        // Narrow mouth for "ee" sounds
+        if (mouthNarrowIndex !== undefined) {
+          // More narrow during yet other phases
+          const narrowAmount = Math.max(0, (variationC > 0 ? variationC : 0) * 0.6)
+          headMeshRef.current.morphTargetInfluences[mouthNarrowIndex] = narrowAmount
+        }
+        
+        // Reduce smile when mouth is open, but keep some expression
+        if (smileIndex !== undefined) {
+          // Dynamic smile that reduces during speech but doesn't disappear
+          const dynamicSmileValue = Math.max(0.1, 0.3 - (lipValue * 0.2))
+          headMeshRef.current.morphTargetInfluences[smileIndex] = dynamicSmileValue
+        }
+      } 
+      // Only do idle smile animation when not speaking
+      else {
+        // Reset all mouth morphs when not speaking
+        const mouthMorphs = [
+          'Mouth_Open', 'Mouth_Narrow', 'Mouth_Round', 'Mouth_Wide', 'Jaw_Open'
+        ]
+        
+        // Reset all mouth shapes except smile
+        mouthMorphs.forEach(morphName => {
+          const morphIndex = headMeshRef.current?.morphTargetDictionary?.[morphName]
+          if (morphIndex !== undefined && headMeshRef.current?.morphTargetInfluences) {
+            headMeshRef.current.morphTargetInfluences[morphIndex] = 0
+          }
+        })
+        
+        // Apply idle smile animation
+        const smileIndex = headMeshRef.current.morphTargetDictionary?.['Mouth_Smile']
+        if (smileIndex !== undefined) {
+          // Calculate smile value between 0.1 and 0.4
+          const smileProgress = (Math.sin(timeRef.current * smileSpeed) + 1) / 2 // Convert -1,1 to 0,1
+          const smileValue = 0.1 + (smileProgress * 0.3) // Map 0,1 to 0.1,0.4
+          headMeshRef.current.morphTargetInfluences[smileIndex] = smileValue
+        }
       }
     }
   })

@@ -32,7 +32,7 @@ const SpeechRecognition = forwardRef<SpeechRecognitionRef, SpeechRecognitionProp
     const currentLangIndexRef = useRef(0);
     
     // Available languages
-    const languages = ['az-AZ', 'ru-RU', 'en-US'];
+    const languages = ['az-AZ', 'tr-TR', 'ru-RU', 'en-US'];
     
     // Active recognition flag
     const isRecognitionActiveRef = useRef(false);

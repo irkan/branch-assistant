@@ -113,17 +113,65 @@ function App() {
               // Create an object URL from the blob
               const audioUrl = URL.createObjectURL(audioBlob);
               
+              // Create audio context for lip sync analysis
+              const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const analyser = audioContext.createAnalyser();
+              analyser.fftSize = 256;
+              
               // Play the audio with AAC type
               const audio = new Audio(audioUrl);
               
               // Set MIME type for AAC audio
               audio.setAttribute('type', 'audio/aac');
               
+              // Connect audio to analyzer for lip sync
+              const source = audioContext.createMediaElementSource(audio);
+              source.connect(analyser);
+              analyser.connect(audioContext.destination);
+              
+              // Set up lip sync analysis
+              const dataArray = new Uint8Array(analyser.frequencyBinCount);
+              
+              const analyzeAudio = () => {
+                if (!analyser) return;
+                
+                analyser.getByteFrequencyData(dataArray);
+                
+                // Calculate average volume in vocal frequency range
+                let sum = 0;
+                const vocalRangeStart = Math.floor(200 * analyser.frequencyBinCount / audioContext.sampleRate);
+                const vocalRangeEnd = Math.ceil(3000 * analyser.frequencyBinCount / audioContext.sampleRate);
+                
+                for (let i = vocalRangeStart; i < Math.min(vocalRangeEnd, dataArray.length); i++) {
+                  sum += dataArray[i];
+                }
+                
+                const average = sum / (vocalRangeEnd - vocalRangeStart);
+                
+                // Map average volume to lip sync value (0-1 range)
+                const normalizedValue = Math.min(average / 128, 1);
+                setLipSyncValue(normalizedValue);
+                
+                // Continue analyzing if still speaking
+                if (isSpeaking) {
+                  requestAnimationFrame(analyzeAudio);
+                }
+              };
+              
               // Set up event listeners for the audio
+              audio.onplay = () => {
+                console.log("Starting lip sync analysis");
+                analyzeAudio();
+              };
+              
               audio.onended = () => {
                 console.log("Speech playback complete, activating microphone...");
                 setIsSpeaking(false);
-                URL.revokeObjectURL(audioUrl); // Clean up the URL
+                setLipSyncValue(0);
+                URL.revokeObjectURL(audioUrl);
+                
+                // Clean up audio context
+                audioContext.close();
                 
                 // Resume speech recognition after audio completes
                 setTimeout(() => {
@@ -136,12 +184,16 @@ function App() {
               // Handle errors in audio playback
               audio.onerror = (e) => {
                 console.error('Error playing audio:', e);
+                setLipSyncValue(0);
+                audioContext.close();
                 handleWebhookFailure();
               };
               
               // Start playback
               audio.play().catch(error => {
                 console.error('Error starting audio playback:', error);
+                setLipSyncValue(0);
+                audioContext.close();
                 handleWebhookFailure();
               });
             } catch (audioError) {
