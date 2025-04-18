@@ -1,19 +1,99 @@
 import React, { Suspense, useState, useRef, useEffect } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera, Html } from '@react-three/drei';
-import { Model as Character } from './Character';
+import { Character } from './Character';
+import { TestCharacter } from './TestCharacter';
+import { SimpleCharacter } from './SimpleCharacter';
+import { AnimatedCharacter } from './AnimatedCharacter';
 import LoadingIndicator from './LoadingIndicator';
 import './Scene3D.css';
 import * as THREE from 'three';
+
+// Add type declaration at the top
+declare global {
+  interface Window {
+    faceNotDetectedLogged?: boolean;
+  }
+}
 
 interface Scene3DProps {
   isSpeaking: boolean;
   isListening: boolean;
   lipSyncValue: number;
   isProcessing: boolean;
-  detectedFace?: string; // Base64 string of detected face
+  detectedFace?: string | null; // Base64 string of detected face
   isFaceDetected: boolean;
   errorMessage?: string | null; // Add error message prop
+}
+
+// Comment out the CameraLogger component
+// function CameraLogger() {
+//   const { camera } = useThree();
+  
+//   useFrame(() => {
+//     // Log occasionally to avoid console spam
+//     if (Math.random() < 0.01) {
+//       // Type assertion to access PerspectiveCamera properties safely
+//       const perspCamera = camera as THREE.PerspectiveCamera;
+      
+//       console.log('Camera:', {
+//         position: [
+//           camera.position.x.toFixed(2),
+//           camera.position.y.toFixed(2),
+//           camera.position.z.toFixed(2)
+//         ],
+//         fov: perspCamera.fov?.toFixed(2) || 'N/A'
+//       });
+//     }
+//   });
+  
+//   return null;
+// }
+
+// Add a console logger for orbit controls
+function OrbitLogger() {
+  const { camera, controls } = useThree();
+  
+  useEffect(() => {
+    // Add event listener to controls for change events
+    if (controls) {
+      const handleControlsChange = () => {
+        if (camera && controls) {
+          // Access target with proper type assertion for OrbitControls
+          // @ts-ignore - Property 'target' exists on OrbitControls instance
+          const target = controls.target as THREE.Vector3;
+          
+          // Type assertion for perspective camera
+          const perspCamera = camera as THREE.PerspectiveCamera;
+          
+          console.log('CAMERA_POSITION', {
+            position: [
+              parseFloat(camera.position.x.toFixed(2)),
+              parseFloat(camera.position.y.toFixed(2)),
+              parseFloat(camera.position.z.toFixed(2))
+            ],
+            target: [
+              parseFloat(target.x.toFixed(2)),
+              parseFloat(target.y.toFixed(2)),
+              parseFloat(target.z.toFixed(2))
+            ],
+            zoom: camera.zoom,
+            fov: perspCamera.fov?.toFixed(2) || 'N/A'
+          });
+        }
+      };
+      
+      // @ts-ignore - addEventListener might not be in the type definitions but it exists
+      controls.addEventListener('change', handleControlsChange);
+      
+      return () => {
+        // @ts-ignore - removeEventListener might not be in the type definitions but it exists
+        controls.removeEventListener('change', handleControlsChange);
+      };
+    }
+  }, [camera, controls]);
+  
+  return null;
 }
 
 const Scene3D: React.FC<Scene3DProps> = ({ 
@@ -32,8 +112,10 @@ const Scene3D: React.FC<Scene3DProps> = ({
   // Handle face detection state changes
   useEffect(() => {
     if (isFaceDetected && detectedFace) {
-      // Log face image data for debugging
-      console.log('Scene3D received face image:', detectedFace?.substring(0, 100) + '...');
+      // Reduce logging - only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Face detected');
+      }
       
       // Show face image when detected
       setFaceImageVisible(true);
@@ -43,12 +125,16 @@ const Scene3D: React.FC<Scene3DProps> = ({
         setOverlayVisible(false);
       }, 500);
     } else {
-      // Log when face image is lost
-      console.log('Scene3D: Face not detected or image missing');
+      // Reduce logging for face detection issues
+      if (process.env.NODE_ENV === 'development' && !window.faceNotDetectedLogged) {
+        console.debug('Face not detected');
+        window.faceNotDetectedLogged = true;
+      }
       
       // Hide face image and show overlay if face detection is lost
       setFaceImageVisible(false);
-      setOverlayVisible(true);
+      // Temporarily force overlay to be hidden for testing
+      setOverlayVisible(false);
     }
   }, [isFaceDetected, detectedFace]);
   
@@ -203,38 +289,55 @@ const Scene3D: React.FC<Scene3DProps> = ({
       {/* 3D Canvas */}
       <div className="canvas-container">
         <Canvas shadows>
-          <Suspense fallback={null}>
-            {/* Camera positioned even higher for better top-down perspective */}
-            <PerspectiveCamera makeDefault position={[0, 3.0, 2.8]} fov={30} />
+          <Suspense fallback={
+            <Html center>
+              <div style={{ color: 'white', background: 'rgba(0,0,0,0.7)', padding: '20px', borderRadius: '10px' }}>
+                Loading 3D model...
+              </div>
+            </Html>
+          }>
+            {/* Camera and controls setup */}
+            <PerspectiveCamera 
+              name="camera"
+              makeDefault 
+              position={[0.5, 3.35, 2.58]} 
+              fov={30}
+              near={0.1}
+              far={1000}
+            />
             
             {/* Soft ambient lighting */}
             <ambientLight intensity={0.7} />
             
             {/* Main directional light from front-top */}
             <directionalLight 
-              position={[3, 5, 5]} 
-              intensity={0.9} 
+              position={[2, 4, 3]} 
+              intensity={1.0} 
               castShadow 
               shadow-mapSize-width={1024} 
               shadow-mapSize-height={1024}
             />
             
             {/* Fill light from left */}
-            <pointLight position={[-3, 1, 0]} intensity={0.7} color="#ffffff" />
+            <pointLight position={[-3, 2, 0]} intensity={0.7} color="#ffffff" />
             
             {/* Fill light from right */}
-            <pointLight position={[3, 1, 0]} intensity={0.7} color="#ffffff" />
+            <pointLight position={[3, 2, 0]} intensity={0.7} color="#ffffff" />
             
             {/* Character component with ref for positioning loading indicator */}
             <group ref={characterRef}>
-              <Character 
-                position={[0, 0.9, 0]} 
-                scale={[1.55, 1.55, 1.55]} 
-                rotation={[Math.PI * 0.06, 0.5, 0]}
-                isSpeaking={isSpeaking}
-                isListening={isListening}
-                lipSyncData={lipSyncValue}
+              {/* Use the new AnimatedCharacter component for better animation */}
+              <AnimatedCharacter 
+                position={[0, 0.8, 0]} 
+                scale={[1.6, 1.6, 1.6]} 
+                rotation={[0, 0.2, 0]}
               />
+              
+              {/* Keep the marker for debug purposes */}
+              <mesh position={[0, 0, 0]} scale={[0.1, 0.1, 0.1]}>
+                <sphereGeometry />
+                <meshBasicMaterial color="red" />
+              </mesh>
               
               {/* Loading indicator positioned above character's head */}
               {isProcessing && (
@@ -250,10 +353,25 @@ const Scene3D: React.FC<Scene3DProps> = ({
             
             {/* Environment map for realistic lighting */}
             <Environment preset="city" />
+            
+            {/* OrbitControls correctly attached to the default camera */}
+            <OrbitControls 
+              makeDefault
+              enablePan={true}
+              enableZoom={true}
+              enableRotate={true}
+              target={[-0.06, 3.04, -0.14]} 
+              minDistance={1.0}
+              maxDistance={5.0}
+              maxPolarAngle={Math.PI * 0.65}
+              minPolarAngle={Math.PI * 0.15}
+              dampingFactor={0.05}
+              enableDamping={true}
+            />
+            
+            {/* Add the orbit logger to track camera changes */}
+            <OrbitLogger />
           </Suspense>
-          
-          {/* Disable orbit controls for production, enable for development */}
-          {/* <OrbitControls /> */}
         </Canvas>
       </div>
     </div>
